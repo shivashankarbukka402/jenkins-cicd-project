@@ -2,60 +2,70 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = 'your-dockerhub-username'
-        IMAGE_NAME = 'jenkins-cicd-app'
+        GIT_URL = 'https://github.com/shivashankarbukka402/jenkins-cicd-project.git'
+        GIT_BRANCH = 'main'
+        GIT_CREDENTIALS = 'github_token'
+        IMAGE_NAME = 'shiva9828/backhand'
+        IMAGE_TAG = 'latest'
+        DOCKERFILE_BASE = 'Dockerfile'
+        DOCKER_REGISTRY_CRED_ID = 'docker_token'
+        SONAR_HOST_URL='http://13.127.205.0:9000'
     }
 
-    stages {
-        stage('Checkout Code') {
+        stages {
+        stage('CHECKOUT') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-username/jenkins-cicd-project.git'
-            }
-        }
-
-        stage('Build with Maven') {
-            steps {
-                sh 'mvn clean package'
-            }
-        }
-
-        stage('Code Quality - SonarQube') {
-            steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn sonar:sonar'
+                script {
+                    gitCheckout(env.GIT_BRANCH, env.GIT_CREDENTIALS, env.GIT_URL)
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Sonar Code Quality check') {
             steps {
-                sh 'docker build -t $DOCKERHUB_USER/$IMAGE_NAME:latest .'
+                script {
+                    dir('./backend') {
+                        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                            sh """
+                                sonar-scanner \
+                                  -Dsonar.projectKey=backend \
+                                  -Dsonar.sources=. \
+                                  -Dsonar.host.url=${env.SONAR_HOST_URL} \
+                                  -Dsonar.token=${SONAR_TOKEN}
+                            """
+                        }
+                    }
+                }
             }
         }
-
-        stage('Push Docker Image') {
+        stage('Docker Build and Push') {
             steps {
-                withCredentials([string(credentialsId: 'dockerhub-token', variable: 'DOCKERHUB_TOKEN')]) {
-                    sh 'echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USER --password-stdin'
-                    sh 'docker push $DOCKERHUB_USER/$IMAGE_NAME:latest'
+                script { 
+                    sh '''
+                        ls -lrt
+                    '''
+                    dir('./backend') {
+                        dockerImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE_BASE} .")
+                        docker.withRegistry('', "${DOCKER_REGISTRY_CRED_ID}") { 
+                            dockerImage.push() 
+                        }
+                    }
                 }
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Trivy Scan') {
             steps {
-                sh 'kubectl apply -f deployment.yaml'
-                sh 'kubectl apply -f service.yaml'
+                sh '''
+                    trivy image \
+                    --severity HIGH,CRITICAL \
+                    --format template \
+                    --template '@/home/ubuntu/trivy/trivy_html.tpl' \
+                    --output 'trivy_backend.html' ${IMAGE_NAME}:${IMAGE_TAG}
+                '''
             }
         }
     }
+}    
 
-    post {
-        success {
-            echo '✅ Deployment completed successfully!'
-        }
-        failure {
-            echo '❌ Build or deployment failed!'
-        }
-    }
-}
+
