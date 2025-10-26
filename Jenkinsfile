@@ -12,15 +12,16 @@ pipeline {
         SONAR_HOST_URL='http://13.127.205.0:9000'
     }
 
-        stages {
+         stages {
         stage('CHECKOUT') {
-            steps {
+            steps{
                 script {
-                    gitCheckout(env.GIT_BRANCH, env.GIT_CREDENTIALS, env.GIT_URL)
+                    git branch: "${env.GIT_BRANCH}",
+                     credentialsId: "${env.GIT_CREDENTIALS}",
+                      url: "${env.GIT_URL}"
                 }
             }
         }
-
         stage('Sonar Code Quality check') {
             steps {
                 script {
