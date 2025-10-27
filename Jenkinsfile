@@ -43,14 +43,14 @@ pipeline {
 
         stage('Docker Build and Push') {
             steps {
-                script {
+                script { 
+                    sh '''
+                        ls -lrt
+                    '''
                     dir('./backend') {
-                        echo "Building Docker Image..."
-                        def dockerImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE_BASE} .")
-
-                        echo "Pushing Docker Image to DockerHub..."
-                        docker.withRegistry('', "${DOCKER_REGISTRY_CRED_ID}") {
-                            dockerImage.push()
+                        dockerImage = docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "-f ${DOCKERFILE_BASE} .")
+                        docker.withRegistry('', "${DOCKER_REGISTRY_CRED_ID}") { 
+                            dockerImage.push() 
                         }
                     }
                 }
